@@ -1,0 +1,21 @@
+{
+  "name": "Runway",
+  "genre": "social",
+  "dim": "3D",
+  "mode": "Party",
+  "players": "2–10",
+  "hook": "Dress for the theme. Own the runway.",
+  "how": "A theme is announced, then you have 90 seconds in the dressing room to pick hair, top, bottoms, shoes, an extra and colors. Every model walks the runway and strikes a pose while everyone else rates the look 1 to 5 stars. Best average takes the podium.",
+  "controls": "Tap or click pieces and colors to dress, drag to turn your model, tap stars (or keys 1–5) to rate",
+  "uses": [
+    ["Host-run rounds", "One player's browser announces the theme, runs the walks and adds up the stars; if it leaves, the next player takes over."],
+    ["Bots", "Bot models dress for the theme, walk and rate the others until enough people join."],
+    ["Live sync", "Everyone sees the same model on the runway, in the outfit its owner picked."],
+    ["Leaderboard", "Each player's best average stars."]
+  ],
+  "ideas": [
+    "Add a pirate theme with hats and eye patches",
+    "Let the winner pick the next theme",
+    "Add a mirror selfie photo you can download"
+  ]
+}

@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Runway</title>
+<style>
+  :root { --ink: #fff6fb; --dim: #d6b9cc; --hot: #ff4f9a; --gold: #ffd166; --panel: #2a1430f0; }
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: #1a0b1f; }
+  body { font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); user-select: none; -webkit-user-select: none; }
+  canvas#world { display: block; touch-action: none; }
+  [hidden] { display: none !important; }
+  #tags { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .tag { position: absolute; left: 0; top: 0; white-space: nowrap; font: 800 13px system-ui, sans-serif; text-shadow: 0 1px 3px #000c; padding: 1px 7px; border-radius: 8px; background: #0006; }
+  .hud { position: fixed; pointer-events: none; text-shadow: 0 1px 4px #000c; }
+  #top { top: max(10px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); padding: 6px 12px; border-radius: 14px; background: #1a0b1fb0; max-width: calc(100vw - 40px); }
+  #top:empty { display: none; }
+  #top b { display: block; font: 900 20px system-ui, sans-serif; letter-spacing: .02em; }
+  #top b em { font-style: normal; color: var(--hot); }
+  #top span { display: block; font-size: 13px; font-weight: 700; color: var(--dim); }
+  #net { display: block; font-size: 12px; color: var(--dim); }
+  #big { left: 0; right: 0; top: 24%; text-align: center; padding: 0 16px; }
+  #big:empty { display: none; }
+  #big small { display: block; font: 800 15px system-ui, sans-serif; letter-spacing: .3em; color: var(--dim); }
+  #big b { display: block; font: 900 clamp(34px, 9vw, 72px)/1.05 system-ui, sans-serif; color: var(--gold); -webkit-text-stroke: 2px #4a1a3a; }
+  #toast { left: 0; right: 0; top: 16%; text-align: center; font: 900 30px system-ui, sans-serif; color: var(--gold); opacity: 0; transition: opacity .3s; }
+  /* the dressing room panel: on the right on wide screens, a sheet at the bottom on phones */
+  #dress { position: fixed; right: max(12px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%); width: 340px; max-height: calc(100vh - 24px); overflow: auto; box-sizing: border-box; padding: 12px; border-radius: 18px; background: var(--panel); border: 1px solid #ffffff22; }
+  @media (max-width: 760px) { #dress { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: auto; max-height: 48vh; border-radius: 18px 18px 0 0; padding: 10px 12px max(10px, env(safe-area-inset-bottom)); } }
+  #tabs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 8px; }
+  #tabs button, .chip, .act { min-height: 44px; border: 2px solid #ffffff22; border-radius: 12px; background: #ffffff10; color: var(--ink); font: 800 13px system-ui, sans-serif; cursor: pointer; touch-action: manipulation; }
+  #tabs button { font-size: 12px; padding: 0 2px; }
+  #tabs button.on, .chip.on { border-color: var(--hot); background: #ff4f9a33; }
+  #opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .chip { padding: 4px 6px; line-height: 1.15; }
+  .chip small { display: block; font-size: 10px; font-weight: 700; color: var(--gold); }
+  #sw { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  #sw button { width: 44px; height: 44px; border-radius: 50%; border: 3px solid #ffffff33; cursor: pointer; touch-action: manipulation; }
+  #sw button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--hot); }
+  #pats { display: flex; gap: 6px; margin-top: 8px; } #pats .chip { flex: 1; }
+  .row { display: flex; gap: 8px; margin-top: 10px; } .row .act { flex: 1; }
+  .act.go { background: var(--hot); border-color: var(--hot); color: #fff; }
+  .act.done { background: #3b2a40; border-color: #ffffff22; }
+  #rate { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(12px, env(safe-area-inset-bottom)); width: min(460px, calc(100vw - 24px)); box-sizing: border-box; padding: 10px 12px; border-radius: 18px; background: var(--panel); border: 1px solid #ffffff22; text-align: center; }
+  #rate p { margin: 0 0 6px; font-weight: 800; }
+  #stars { display: flex; justify-content: center; gap: 6px; }
+  #stars button { width: 56px; height: 56px; border: 0; border-radius: 14px; background: #ffffff12; font-size: 30px; color: #6b5a70; cursor: pointer; touch-action: manipulation; }
+  #stars button.on { color: var(--gold); background: #ffd16622; }
+  #over { position: fixed; inset: 0; display: grid; place-items: center end; box-sizing: border-box; padding: 16px max(20px, env(safe-area-inset-right)) 16px 16px; background: linear-gradient(90deg, transparent 45%, #1a0b1fb0); }
+  @media (max-width: 760px) { #over { place-items: end center; padding: 16px 16px max(12px, env(safe-area-inset-bottom)); background: linear-gradient(180deg, transparent 40%, #1a0b1fc0); } #over .card { max-height: 52vh; } }
+  .card { box-sizing: border-box; width: min(380px, calc(100vw - 32px)); max-height: 86vh; overflow: auto; padding: 16px 18px; border-radius: 18px; background: #2a1430; border: 1px solid #ffffff2a; box-shadow: 0 0 50px #ff4f9a44; }
+  .card h2 { margin: 0 0 2px; font-size: 24px; text-align: center; } .card .sub { margin: 0 0 8px; color: var(--dim); font-size: 13px; text-align: center; }
+  .card h3 { margin: 12px 0 4px; font-size: 12px; color: var(--gold); text-transform: uppercase; letter-spacing: .08em; }
+  .card ol { margin: 0; padding-left: 24px; font-size: 14px; } .card li { padding: 1px 0; } .card li span { float: right; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold); }
+  .card li.me { color: var(--gold); }
+  .card p { margin: 8px 0 0; font-size: 13px; opacity: .8; text-align: center; }
+  button.big { width: 100%; min-height: 48px; margin-top: 12px; border: 0; border-radius: 12px; background: var(--hot); color: #fff; font: 800 17px system-ui, sans-serif; cursor: pointer; }
+</style>
+<script src="https://cdn.multiplayeragent.com/sdk/mp.global.js"></script>
+<script type="importmap">{ "imports": { "three": "./libs/three.module.min.js" } }</script>
+</head>
+<body>
+<div id="tags"></div>
+<div class="hud" id="top"></div>
+<div class="hud" id="big"></div>
+<div class="hud" id="toast"></div>
+<div id="dress" hidden>
+  <div id="tabs"></div>
+  <div id="opts"></div>
+  <div id="pats"></div>
+  <div id="sw"></div>
+  <div class="row"><button class="act" id="rand">🎲 Surprise me</button><button class="act go" id="ready">I'm ready</button></div>
+</div>
+<div id="rate" hidden><p id="rateQ"></p><div id="stars"></div></div>
+<div id="over" hidden><div class="card">
+  <h2 id="winner"></h2><div class="sub" id="winSub"></div><ol id="results"></ol>
+  <h3>Best looks ever</h3><ol id="board"><li>Loading…</li></ol>
+  <button class="big" id="again">Next show</button><p id="next"></p>
+</div></div>
+<script type="module">
+/* ═══ RUNWAY · a Multiplayer Agent starter ════════════════════════════════════════════
+ * A dress-up show. A theme is announced ("Beach day", "Space prom"); you get 90 seconds in
+ * the dressing room to pick hair, top, bottoms, shoes, an extra and colors; then every model
+ * walks the runway and strikes a pose while everyone else rates the look 1–5 stars. Best
+ * average takes the podium. Party, 2–10 players; bot models fill empty spots.
+ *
+ * WHERE THINGS ARE (search for the "── " headers):
+ *   CONFIG ........ phase timers, how many models, bots
+ *   WARDROBE ...... themes, every clothing piece (with the theme tags bots look for), colors,
+ *                   patterns, poses. Add a piece here and build its shape in MODELS.
+ *   CONNECTION .... MP_CONNECT, joining, the offline room, who is host
+ *   STAGE ......... the runway, audience, lights and camera flashes; the dressing room
+ *   MODELS ........ the model: body, every clothing piece built from simple shapes, walking
+ *                   and posing
+ *   SHOW (HOST) ... the phases (theme, dress, walk, podium), bot outfits and ratings, the
+ *                   star tally. Only the host writes these.
+ *   ME ............ your outfit, your ratings, ready
+ *   HUD ........... top bar, dressing panel, star buttons, results card, leaderboard
+ *   SOUND ......... WebAudio: the runway beat, clicks, shutters, applause
+ *
+ * HOW THE MULTIPLAYER WORKS (a relay room: no server code):
+ *   - The show lives in ONE shared field, `show`: {id, v, phase, th (theme), endsAt, order
+ *     (who walks, in order), i (who is walking now), at (when they started), sc (stars so
+ *     far), res (the final ranking)}. Only the HOST writes it; `v` goes up on every write.
+ *   - The HOST is the lowest sessionId among live players (heartbeat seen in the last 3s),
+ *     worked out every frame. It also dresses the bots (shared `bots`: {r, list}) and rates
+ *     for them. A new host adopts both and carries on from the timestamps.
+ *   - Each player writes its OWN entity: `o` (its outfit, one JSON field, sent when you change
+ *     something), `rate` {r, s: {modelId: stars}} (your ratings this show), `rdy` (ready /
+ *     next show), `hb` (heartbeat) once a second and `n`/`c` (name, color). No intents: the
+ *     host reads everyone's ratings when each walk ends and adds them up.
+ *   - Someone who arrives mid-show watches and rates; they walk in the next one.
+ *   - ?attract plays offline, bots plus an autopilot that dresses you, with short timers.
+ *   - Leaderboard "runway-stars": each player's best average, stored as stars × 100.
+ */
+import * as THREE from "three";
+
+// ── CONFIG ──────────────────────────────────────────────────────────────────────────
+const CONFIG = {
+  seats: 6,              // bot models fill the show up to this many
+  themeMs: 4500,         // ms the theme is announced
+  dressMs: 90000,        // ms in the dressing room
+  walkMs: 7500,          // ms each model has on the runway (walk out, pose, walk back)
+  podiumMs: 14000,       // ms on the podium before the next show
+  botTaste: 0.8,         // 0..1: how often a bot picks pieces that fit the theme
+  board: "runway-stars",
+};
+const BOT_NAMES = ["Coco", "Valentina", "Ziggy", "Marlowe", "Bijou", "Dash", "Peaches", "Orion", "Lulu"];
+const COLORS = ["#ff4f9a", "#3dc6ff", "#ffd166", "#7be07b", "#b07cff", "#ff8c42", "#3fe0c5", "#ff7ad9", "#9aa8ff", "#ff6b6b"];
+const NAME_A = ["Fab", "Chic", "Glam", "Sassy", "Dapper", "Snazzy"], NAME_B = ["Star", "Icon", "Muse", "Diva", "Strut", "Look"];
+
+// ── WARDROBE ────────────────────────────────────────────────────────────────────────
+// Swatches every piece can be dyed in. Themes point at the ones that fit them.
+const SWATCH = ["#f6f2ea", "#24212c", "#7a4a2a", "#e8c07a", "#ff4f9a", "#ff8c42", "#ffd166", "#6fd36b", "#2fbfb0", "#3d8bff", "#8a5cff", "#d8343a", "#b8c0d0", "#ffb3cf"];
+const SKINS = ["#ffe0c2", "#f1c39a", "#d39a6a", "#a8704a", "#6e4630"];
+const THEMES = [
+  { name: "Beach day", tags: ["beach", "summer"], sw: [6, 8, 5, 13, 0], sky: "#ffb37a" },
+  { name: "Space prom", tags: ["space", "formal"], sw: [12, 10, 9, 1, 0], sky: "#5a3cff" },
+  { name: "Winter cabin", tags: ["winter", "cozy"], sw: [11, 0, 2, 7, 9], sky: "#9fd3ff" },
+  { name: "Rock star", tags: ["rock", "dark"], sw: [1, 11, 12, 10], sky: "#ff3b6b" },
+  { name: "Fairy tale", tags: ["fairy", "formal"], sw: [13, 10, 0, 8, 6], sky: "#ff9ff0" },
+  { name: "Sports day", tags: ["sporty"], sw: [9, 11, 0, 7, 6], sky: "#4fe08a" },
+  { name: "Spooky night", tags: ["spooky", "dark"], sw: [1, 10, 5, 7], sky: "#8a5cff" },
+  { name: "Garden party", tags: ["garden", "summer"], sw: [7, 13, 6, 0, 4], sky: "#9cf27a" },
+  { name: "Superhero", tags: ["hero"], sw: [11, 9, 6, 1], sky: "#ff5c3b" },
+];
+// Every piece: id (built in MODELS), label, and the theme tags it suits.
+const WARDROBE = {
+  hair: [
+    { id: "bob", label: "Bob", tags: ["formal", "fairy"] }, { id: "spiky", label: "Spiky", tags: ["rock", "sporty", "hero"] },
+    { id: "long", label: "Long", tags: ["fairy", "beach", "formal"] }, { id: "bun", label: "Bun", tags: ["formal", "garden"] },
+    { id: "afro", label: "Big curls", tags: ["rock", "summer", "space"] }, { id: "pony", label: "Ponytail", tags: ["sporty", "beach"] },
+    { id: "mohawk", label: "Mohawk", tags: ["rock", "spooky", "dark"] }, { id: "none", label: "Bald", tags: ["space"] },
+  ],
+  top: [
+    { id: "tee", label: "Tee", tags: ["beach", "sporty", "summer"] }, { id: "tank", label: "Tank", tags: ["beach", "sporty", "summer"] },
+    { id: "hoodie", label: "Hoodie", tags: ["winter", "cozy", "sporty"] }, { id: "jacket", label: "Leather jacket", tags: ["rock", "dark", "winter"] },
+    { id: "blazer", label: "Tux", tags: ["formal", "space"] }, { id: "bodice", label: "Gown top", tags: ["formal", "fairy", "garden"] },
+    { id: "sweater", label: "Sweater", tags: ["winter", "cozy"] }, { id: "suit", label: "Space suit", tags: ["space", "hero"] },
+  ],
+  bottom: [
+    { id: "pants", label: "Pants", tags: ["formal", "rock", "winter", "dark"] }, { id: "shorts", label: "Shorts", tags: ["beach", "sporty", "summer"] },
+    { id: "skirt", label: "Skirt", tags: ["garden", "fairy", "summer"] }, { id: "gown", label: "Gown", tags: ["formal", "fairy", "space"] },
+    { id: "tights", label: "Hero tights", tags: ["hero", "sporty", "space"] },
+  ],
+  shoes: [
+    { id: "sneakers", label: "Sneakers", tags: ["sporty", "summer", "hero"] }, { id: "boots", label: "Boots", tags: ["winter", "rock", "spooky", "dark", "hero"] },
+    { id: "sandals", label: "Sandals", tags: ["beach", "summer", "garden"] }, { id: "heels", label: "Heels", tags: ["formal", "fairy", "garden"] },
+    { id: "moon", label: "Moon boots", tags: ["space", "winter"] },
+  ],
+  extra: [
+    { id: "none", label: "Nothing", tags: [] }, { id: "shades", label: "Shades", tags: ["beach", "rock", "summer"] },
+    { id: "sunhat", label: "Sun hat", tags: ["beach", "garden", "summer"] }, { id: "crown", label: "Crown", tags: ["fairy", "formal"] },
+    { id: "helmet", label: "Bubble helmet", tags: ["space"] }, { id: "scarf", label: "Scarf", tags: ["winter", "cozy"] },
+    { id: "cape", label: "Cape", tags: ["hero", "spooky", "fairy"] }, { id: "wings", label: "Wings", tags: ["fairy", "garden"] },
+    { id: "antenna", label: "Antennae", tags: ["space", "spooky"] }, { id: "witch", label: "Pointy hat", tags: ["spooky", "dark"] },
+    { id: "flower", label: "Flower", tags: ["garden", "beach"] }, { id: "phones", label: "Headphones", tags: ["sporty", "rock"] },
+  ],
+};
+const PATTERNS = [{ id: "plain", label: "Plain", tags: [] }, { id: "stripes", label: "Stripes", tags: ["beach", "sporty"] }, { id: "dots", label: "Dots", tags: ["summer", "garden"] }, { id: "stars", label: "Stars", tags: ["space", "hero", "fairy"] }, { id: "checks", label: "Checks", tags: ["cozy", "winter", "rock"] }];
+const POSES = [{ id: "wave", label: "👋 Wave" }, { id: "hips", label: "💁 Hands on hips" }, { id: "point", label: "👉 Point" }, { id: "spin", label: "🌀 Spin" }, { id: "flex", label: "💪 Flex" }, { id: "heart", label: "🙌 Arms up" }];
+const SLOTS = ["hair", "top", "bottom", "shoes", "extra"];
+
+// ── CONNECTION ──────────────────────────────────────────────────────────────────────
+// The builder fills these in for this game. Downloaded from GitHub? Put your own pk_ key here.
+const MP_CONNECT = {
+  key: 'pk_REPLACE_ME',
+  room: 'runway',
+  endpoint: 'wss://live.multiplayeragent.com',
+  apiUrl: 'https://api.multiplayeragent.com',
+};
+const QS = new URLSearchParams(location.search), ATTRACT = QS.has("attract");
+if (ATTRACT) Object.assign(CONFIG, { seats: 5, themeMs: 500, dressMs: 2600, walkMs: 2900, podiumMs: 4000 });
+
+/** Same shape as the SDK client, kept in this tab: offline play and ?attract. */
+function localRoom() {
+  const id = "local", state = { entities: { players: { [id]: {} } }, shared: {} }, subs = [];
+  let queued = false;
+  const emit = () => { if (!queued) { queued = true; queueMicrotask(() => { queued = false; subs.forEach((f) => f(state)); }); } };
+  const put = (o, k, v) => { if (typeof k === "object") Object.assign(o, k); else o[k] = v; emit(); };
+  return {
+    sessionId: id, state, offline: true,
+    me: { set: (k, v) => put(state.entities.players[id], k, v) },
+    setShared: (k, v) => put(state.shared, k, v),
+    onState: (f) => { subs.push(f); f(state); }, onJoin() {}, onLeave() {}, on() {}, send() {},
+    onDisconnect() {}, onReconnect() {}, leave: async () => {},
+  };
+}
+async function connect() {
+  if (ATTRACT || typeof MP === "undefined") return localRoom();
+  try {
+    const mp = await Promise.race([MP.join({ ...MP_CONNECT }), new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 10000))]);
+    window.mp = mp; // the builder calls window.mp.leave() when the page closes
+    return mp;
+  } catch (e) {
+    console.warn("Playing offline:", e && e.message);
+    return localRoom();
+  }
+}
+const parse = (v, fb) => { if (typeof v !== "string") return fb; try { return JSON.parse(v); } catch { return fb; } };
+const memo = new Map();
+/** A JSON field, parsed once per change (read-only: never mutate what this returns). */
+function cached(key, raw, fb) { const m = memo.get(key); if (m && m.raw === raw) return m.v; const v = parse(raw, fb); memo.set(key, { raw, v }); return v; }
+let net = null, S = { entities: { players: {} }, shared: {} }, netDown = false;
+const seenHb = new Map(); // sessionId -> { hb, at } on OUR clock
+/** Players whose heartbeat moved in the last 3s (plus us), sorted by sessionId. */
+function livePlayers() {
+  const now = performance.now(), out = [];
+  for (const [id, p] of Object.entries(S.entities.players || {})) {
+    const s = seenHb.get(id);
+    if (!s || s.hb !== p.hb) seenHb.set(id, { hb: p.hb, at: now });
+    if (id === net.sessionId || now - seenHb.get(id).at < 3000) out.push(id);
+  }
+  return out.sort();
+}
+let hostHold = 0, lastTick = performance.now(); // lastTick: when frame() last ran; hostHold: after a freeze, no hosting before this time (see frame())
+const isHost = () => performance.now() > hostHold && performance.now() - lastTick < 1000 && livePlayers()[0] === net.sessionId; // a tab whose loop has stopped doesn't host
+function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+// ── OUTFITS ─────────────────────────────────────────────────────────────────────────
+// An outfit: { hair:[i, sw], top:[i, sw, pattern], bottom:[i, sw], shoes:[i, sw], extra:[i, sw], k (skin), p (pose) }.
+const pickOf = (a, rnd) => a[Math.floor(rnd() * a.length)];
+/** A random outfit; with a theme, mostly pieces and colors that fit it (how bots dress). */
+function randomOutfit(theme, rnd = Math.random, taste = 0) {
+  const o = { k: Math.floor(rnd() * SKINS.length), p: Math.floor(rnd() * POSES.length) };
+  const color = () => (theme && rnd() < taste ? pickOf(theme.sw, rnd) : Math.floor(rnd() * SWATCH.length));
+  for (const slot of SLOTS) {
+    const all = WARDROBE[slot].map((_, i) => i), fit = theme ? all.filter((i) => WARDROBE[slot][i].tags.some((t) => theme.tags.includes(t))) : [];
+    o[slot] = [theme && fit.length && rnd() < taste ? pickOf(fit, rnd) : pickOf(all, rnd), color()];
+  }
+  if (!theme && rnd() < 0.5) o.extra[0] = 0;
+  const pats = PATTERNS.map((_, i) => i), fitP = theme ? pats.filter((i) => PATTERNS[i].tags.some((t) => theme.tags.includes(t))) : [];
+  o.top[2] = rnd() < 0.5 ? 0 : theme && fitP.length && rnd() < taste ? pickOf(fitP, rnd) : pickOf(pats, rnd);
+  return o;
+}
+/** 0..1: how well an outfit fits a theme (pieces with the theme's tags, colors from its palette). */
+function themeFit(o, theme) {
+  if (!o || !theme) return 0;
+  let pieces = 0, colors = 0;
+  for (const slot of SLOTS) {
+    const it = WARDROBE[slot][o[slot]?.[0]];
+    if (it && it.tags.some((t) => theme.tags.includes(t))) pieces++;
+    if (theme.sw.includes(o[slot]?.[1])) colors++;
+  }
+  return (pieces / SLOTS.length) * 0.65 + (colors / SLOTS.length) * 0.35;
+}
+function validOutfit(o) { return o && SLOTS.every((s) => Array.isArray(o[s]) && WARDROBE[s][o[s][0]] && SWATCH[o[s][1]]); }
+
+// ── STAGE ───────────────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.shadowMap.enabled = true;
+renderer.domElement.id = "world";
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#1a0b1f");
+scene.fog = new THREE.Fog("#1a0b1f", 22, 48);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 120);
+function fit() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener("resize", fit); addEventListener("orientationchange", fit); fit();
+scene.add(new THREE.HemisphereLight("#ffd9ef", "#3a1a40", 1.2));
+const mat = (color, more) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, ...more });
+function canvasTex(w, h, paint) { const c = document.createElement("canvas"); c.width = w; c.height = h; paint(c.getContext("2d"), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+const glowTex = canvasTex(64, 64, (c) => { const g = c.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, "#fff"); g.addColorStop(0.3, "#ffffffaa"); g.addColorStop(1, "#fff0"); c.fillStyle = g; c.fillRect(0, 0, 64, 64); });
+const glow = (color, size, opacity = 1) => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity })); s.scale.set(size, size, 1); return s; };
+
+// The runway: a glossy catwalk running toward the camera, light strips, a backdrop with the theme.
+const RUN_BACK = -9, RUN_FRONT = 2.2, RUN_Y = 0.5; // where a walk starts and turns, and the catwalk's height
+const show = new THREE.Group(); scene.add(show);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), mat("#24102a", { roughness: 0.9 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; show.add(floor);
+const catwalk = new THREE.Mesh(new THREE.BoxGeometry(2.6, RUN_Y, 15), mat("#f4eef6", { roughness: 0.25, metalness: 0.1 })); catwalk.position.set(0, RUN_Y / 2, -3.2); catwalk.receiveShadow = true; show.add(catwalk);
+const stripMat = new THREE.MeshBasicMaterial({ color: "#ff4f9a" });
+for (const s of [-1, 1]) { const strip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 15), stripMat); strip.position.set(s * 1.32, RUN_Y + 0.01, -3.2); show.add(strip); }
+const stage = new THREE.Mesh(new THREE.BoxGeometry(12, RUN_Y, 4), mat("#3a1c44", { roughness: 0.4 })); stage.position.set(0, RUN_Y / 2, -12.4); stage.receiveShadow = true; show.add(stage);
+let backdropTheme = "";
+const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(14, 6.5), new THREE.MeshBasicMaterial({ color: "#ffffff" })); backdrop.position.set(0, 3.7, -14.3); show.add(backdrop);
+function paintBackdrop(theme) {
+  if (backdropTheme === theme.name) return;
+  backdropTheme = theme.name;
+  backdrop.material.map?.dispose();
+  backdrop.material.map = canvasTex(1024, 476, (c, w, h) => {
+    const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#1a0b1f"); g.addColorStop(1, theme.sky); c.fillStyle = g; c.fillRect(0, 0, w, h);
+    for (let i = 0; i < 60; i++) { c.fillStyle = `rgba(255,255,255,${Math.random() * 0.5})`; c.beginPath(); c.arc(Math.random() * w, Math.random() * h * 0.7, Math.random() * 2.5, 0, 7); c.fill(); }
+    c.textAlign = "center"; c.textBaseline = "middle";
+    c.font = "900 64px system-ui, sans-serif"; c.shadowColor = "#ff4f9a"; c.shadowBlur = 30; c.fillStyle = "#ffe3f1"; c.fillText("RUNWAY", w / 2, 92);
+    c.font = "italic 900 110px system-ui, sans-serif"; c.shadowColor = theme.sky; c.shadowBlur = 40; c.lineWidth = 6; c.strokeStyle = "#fff8"; c.strokeText(theme.name, w / 2, 260); c.fillStyle = "#fff"; c.fillText(theme.name, w / 2, 260);
+  });
+  backdrop.material.needsUpdate = true;
+}
+// The audience: two banks of fans either side of the catwalk, one instanced mesh for bodies, one for heads.
+const FANS = 64, fanBody = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.28, 0.5, 4, 8), mat("#ffffff"), FANS), fanHead = new THREE.InstancedMesh(new THREE.SphereGeometry(0.2, 10, 8), mat("#ffffff"), FANS);
+const fans = Array.from({ length: FANS }, (_, i) => {
+  const side = i % 2 ? 1 : -1, row = Math.floor(i / 32), k = Math.floor((i % 32) / 2);
+  return { x: side * (2.6 + row * 1.1 + (k % 2) * 0.2), z: -0.3 - k * 0.75, y: row * 0.5, ph: Math.random() * 6 };
+});
+fans.forEach((f, i) => { fanBody.setColorAt(i, new THREE.Color(pickOf(COLORS, Math.random)).multiplyScalar(0.55)); fanHead.setColorAt(i, new THREE.Color(pickOf(SKINS, Math.random)).multiplyScalar(0.7)); });
+show.add(fanBody, fanHead);
+const M4 = new THREE.Matrix4();
+function animateFans(t, hype) {
+  fans.forEach((f, i) => {
+    const b = Math.abs(Math.sin(t * (2 + hype * 4) + f.ph)) * (0.05 + hype * 0.25);
+    fanBody.setMatrixAt(i, M4.makeTranslation(f.x, f.y + 0.55 + b, f.z)); fanHead.setMatrixAt(i, M4.makeTranslation(f.x, f.y + 1.2 + b, f.z));
+  });
+  fanBody.instanceMatrix.needsUpdate = fanHead.instanceMatrix.needsUpdate = true;
+}
+// Lights: a key spotlight that follows the model (with shadows), two colored washes, camera flashes.
+const spot = new THREE.SpotLight("#fff4fb", 60, 30, 0.42, 0.5, 1.2); spot.position.set(0, 9, 4); spot.castShadow = true; spot.shadow.mapSize.set(1024, 1024); show.add(spot, spot.target);
+const washA = new THREE.PointLight("#ff4f9a", 25, 0, 2), washB = new THREE.PointLight("#3dc6ff", 25, 0, 2); washA.position.set(-5, 5, -6); washB.position.set(5, 5, -6); show.add(washA, washB);
+const flashes = Array.from({ length: 10 }, () => { const s = glow("#ffffff", 1.2, 0); show.add(s); return { s, life: 0 }; });
+function popFlash(n) { for (let k = 0; k < n; k++) { const f = flashes.find((x) => x.life <= 0); if (!f) return; const fan = pickOf(fans, Math.random); f.s.position.set(fan.x, fan.y + 1.5, fan.z); f.life = 0.25; } }
+// Confetti for the podium.
+const CONF = 200, confetti = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.12, 0.2), new THREE.MeshBasicMaterial({ color: "#ffffff", side: THREE.DoubleSide }), CONF);
+const bits = Array.from({ length: CONF }, () => ({ x: 0, y: -10, z: 0, vx: 0, vy: 0, vz: 0, r: 0, life: 0 }));
+for (let i = 0; i < CONF; i++) confetti.setColorAt(i, new THREE.Color(COLORS[i % COLORS.length]));
+scene.add(confetti);
+let confNext = 0;
+function burst(x, y, z, n, up = 6) { for (let k = 0; k < n; k++) { const b = bits[confNext++ % CONF]; Object.assign(b, { x, y, z, vx: (Math.random() - 0.5) * 5, vy: up * (0.5 + Math.random()), vz: (Math.random() - 0.5) * 3, r: Math.random() * 6, life: 2.5 }); } }
+const Q = new THREE.Quaternion(), E = new THREE.Euler(), V3 = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1);
+function animateConfetti(dt) {
+  for (let i = 0; i < CONF; i++) {
+    const b = bits[i];
+    if (b.life > 0) { b.life -= dt; b.vy -= 9 * dt; b.vx *= 0.99; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.r += dt * 8; if (b.y < 0.55) { b.y = 0.55; b.vy = 0; b.vx *= 0.8; } }
+    confetti.setMatrixAt(i, M4.compose(V3.set(b.x, b.life > 0 ? b.y : -10, b.z), Q.setFromEuler(E.set(b.r, b.r * 0.7, 0)), ONE));
+  }
+  confetti.instanceMatrix.needsUpdate = true;
+}
+// The podium: three blocks at the front of the stage.
+const PODIUM = [{ x: 0, h: 1.2 }, { x: -1.6, h: 0.8 }, { x: 1.6, h: 0.5 }]; // 1st, 2nd, 3rd
+const podium = new THREE.Group(); show.add(podium);
+PODIUM.forEach((p, i) => {
+  const b = new THREE.Mesh(new THREE.BoxGeometry(1.4, p.h, 1.2), mat(["#ffd166", "#d6dbe8", "#e0995a"][i], { metalness: 0.3, roughness: 0.35 })); b.position.set(p.x, RUN_Y + p.h / 2, -10.6); b.castShadow = b.receiveShadow = true; podium.add(b);
+  const n = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), new THREE.MeshBasicMaterial({ transparent: true, map: canvasTex(64, 64, (c) => { c.font = "900 52px system-ui"; c.textAlign = "center"; c.fillStyle = "#3a1c44"; c.fillText(String(i + 1), 32, 52); }) }));
+  n.position.set(p.x, RUN_Y + p.h / 2, -9.99); podium.add(n);
+});
+// The dressing room: off to the side. A vanity mirror ringed with bulbs, a clothes rack, a turntable.
+const DR = new THREE.Vector3(40, 0, 0);
+const room = new THREE.Group(); room.position.copy(DR); scene.add(room);
+{
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(14, 7), mat("#ffc1dc", { roughness: 0.9 })); wall.position.set(0, 3.5, -3); room.add(wall);
+  const flr = new THREE.Mesh(new THREE.CircleGeometry(9, 40), mat("#b77fa0", { roughness: 0.8 })); flr.rotation.x = -Math.PI / 2; flr.receiveShadow = true; room.add(flr);
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(1.6, 40), mat("#ff4f9a")); rug.rotation.x = -Math.PI / 2; rug.position.y = 0.01; room.add(rug);
+  const turn = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1, 0.18, 36), mat("#fff3fa", { roughness: 0.3 })); turn.position.y = 0.09; turn.receiveShadow = true; room.add(turn);
+  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 3), new THREE.MeshBasicMaterial({ map: canvasTex(64, 128, (c, w, h) => { const g = c.createLinearGradient(0, 0, w, h); g.addColorStop(0, "#e9f6ff"); g.addColorStop(0.5, "#b9d8f2"); g.addColorStop(1, "#d8ecff"); c.fillStyle = g; c.fillRect(0, 0, w, h); c.fillStyle = "#ffffff88"; c.beginPath(); c.moveTo(10, 0); c.lineTo(30, 0); c.lineTo(0, 50); c.lineTo(0, 30); c.fill(); }) })); mirror.position.set(-3.1, 2.1, -2.95); room.add(mirror);
+  const bulbGeo = new THREE.SphereGeometry(0.09, 10, 8), bulbMat = new THREE.MeshBasicMaterial({ color: "#fff3c4" });
+  for (let k = 0; k < 9; k++) for (const s of [-1, 1]) { const b = new THREE.Mesh(bulbGeo, bulbMat); b.position.set(-3.1 + s * 1.35, 0.7 + k * 0.33, -2.9); room.add(b); }
+  for (let k = 0; k < 7; k++) { const b = new THREE.Mesh(bulbGeo, bulbMat); b.position.set(-4.3 + k * 0.4, 3.75, -2.9); room.add(b); }
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 3, 8).rotateZ(Math.PI / 2), mat("#c9c3d6", { metalness: 0.8, roughness: 0.3 })); bar.position.set(3.2, 2.5, -2.4); room.add(bar);
+  for (const s of [-1, 1]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.5, 8), bar.material); leg.position.set(3.2 + s * 1.5, 1.25, -2.4); room.add(leg); }
+  for (let k = 0; k < 9; k++) { const cl = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.1 + (k % 3) * 0.2, 0.7), mat(SWATCH[(k * 5) % SWATCH.length])); cl.position.set(1.9 + k * 0.32, 1.85 - (k % 3) * 0.1, -2.4); cl.rotation.y = 0.15; room.add(cl); }
+  const key = new THREE.PointLight("#fff1e0", 30, 12, 1.5); key.position.set(1.5, 4, 3); room.add(key);
+  const fill = new THREE.PointLight("#ff9fd0", 12, 10, 1.5); fill.position.set(-3, 2.5, 1); room.add(fill);
+}
+
+// ── MODELS ──────────────────────────────────────────────────────────────────────────
+const black = mat("#1d1a24"), white = mat("#ffffff"), goldM = mat("#ffc83d", { metalness: 0.7, roughness: 0.3, emissive: "#553300" });
+const patTex = new Map();
+/** A canvas texture of a pattern on a color (cached). */
+function patternTex(color, pat) {
+  const key = color + pat;
+  if (patTex.has(key)) return patTex.get(key);
+  const t = canvasTex(64, 64, (c) => {
+    c.fillStyle = color; c.fillRect(0, 0, 64, 64);
+    const ink = new THREE.Color(color).getHSL({}).l > 0.6 ? "#0000004a" : "#ffffffb0"; c.fillStyle = ink;
+    if (pat === "stripes") for (let y = 0; y < 64; y += 16) c.fillRect(0, y, 64, 7);
+    if (pat === "dots") for (let y = 8; y < 64; y += 16) for (let x = (y / 16) % 2 ? 0 : 8; x < 64; x += 16) { c.beginPath(); c.arc(x, y, 4, 0, 7); c.fill(); }
+    if (pat === "checks") for (let y = 0; y < 64; y += 16) for (let x = (y / 16) % 2 ? 16 : 0; x < 64; x += 32) c.fillRect(x, y, 16, 16);
+    if (pat === "stars") for (const [x, y] of [[14, 14], [44, 28], [22, 48], [54, 56]]) { c.beginPath(); for (let k = 0; k < 10; k++) { const r = k % 2 ? 3 : 7, a = (k / 10) * Math.PI * 2 - Math.PI / 2; c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } c.fill(); }
+  });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 2);
+  patTex.set(key, t); return t;
+}
+const geo = {
+  leg: new THREE.CapsuleGeometry(0.075, 0.62, 4, 8), arm: new THREE.CapsuleGeometry(0.06, 0.42, 4, 8), hand: new THREE.SphereGeometry(0.07, 8, 6),
+  torso: new THREE.CylinderGeometry(0.2, 0.17, 0.56, 14), head: new THREE.SphereGeometry(0.19, 18, 14), eye: new THREE.SphereGeometry(0.025, 8, 6),
+  cap: new THREE.SphereGeometry(0.205, 18, 10, 0, Math.PI * 2, 0, 1.75),
+};
+/** An empty model: body parts on pivots (legs, arms, head) that clothes hang on. */
+function makeModel() {
+  const g = new THREE.Group(), rig = new THREE.Group(); g.add(rig);
+  const skin = mat("#ffe0c2");
+  const add = (m, parent, x, y, z) => { m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+  const legs = [-1, 1].map((s) => { const p = new THREE.Group(); p.position.set(s * 0.1, 0.92, 0); rig.add(p); add(new THREE.Mesh(geo.leg, skin), p, 0, -0.43, 0); return p; });
+  add(new THREE.Mesh(geo.torso, skin), rig, 0, 1.2, 0);
+  const arms = [-1, 1].map((s) => { const p = new THREE.Group(); p.position.set(s * 0.27, 1.43, 0); rig.add(p); add(new THREE.Mesh(geo.arm, skin), p, 0, -0.27, 0); add(new THREE.Mesh(geo.hand, skin), p, 0, -0.55, 0); return p; });
+  const head = new THREE.Group(); head.position.y = 1.68; rig.add(head);
+  add(new THREE.Mesh(geo.head, skin), head, 0, 0, 0);
+  for (const s of [-1, 1]) add(new THREE.Mesh(geo.eye, black), head, s * 0.065, 0.02, 0.175);
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 6, 12, Math.PI), black); smile.rotation.z = Math.PI; smile.position.set(0, -0.06, 0.17); head.add(smile);
+  const clothes = new THREE.Group(); rig.add(clothes);
+  scene.add(g);
+  return { g, rig, legs, arms, head, skin, clothes, worn: [], key: "", x: 0, z: 0, h: 0, pop: 0, tag: null };
+}
+/** Put an outfit on a model: rebuild its clothes from simple shapes (only when the outfit changed). */
+function dress(m, o) {
+  const key = JSON.stringify(o);
+  if (m.key === key || !validOutfit(o)) return;
+  m.key = key; m.pop = 1;
+  for (const w of m.worn) w.parent.remove(w);
+  m.worn = [];
+  m.skin.color.set(SKINS[o.k] || SKINS[0]);
+  const put = (mesh, parent, x, y, z) => { mesh.position.set(x, y, z); mesh.castShadow = true; parent.add(mesh); m.worn.push(mesh); return mesh; };
+  const C = (slot) => SWATCH[o[slot][1]];
+  // Hair
+  const hm = mat(C("hair"), { roughness: 0.5 }), hair = WARDROBE.hair[o.hair[0]].id, H = m.head;
+  const cap = () => put(new THREE.Mesh(geo.cap, hm), H, 0, 0.015, -0.01);
+  if (hair === "bob") { cap().scale.set(1.08, 1.05, 1.08); for (const s of [-1, 1]) put(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.22, 0.22), hm), H, s * 0.19, -0.06, -0.02); }
+  if (hair === "spiky") { cap(); for (let k = 0; k < 8; k++) { const c = put(new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 6), hm), H, Math.sin(k * 0.8) * 0.12, 0.2, Math.cos(k * 0.8) * 0.12 - 0.02); c.rotation.set(Math.cos(k * 0.8) * 0.6, 0, -Math.sin(k * 0.8) * 0.6); } }
+  if (hair === "long") { cap().scale.set(1.08, 1.05, 1.08); put(new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.55, 0.1), hm), H, 0, -0.22, -0.15); }
+  if (hair === "bun") { cap(); put(new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), hm), H, 0, 0.2, -0.1); }
+  if (hair === "afro") put(new THREE.Mesh(new THREE.IcosahedronGeometry(0.31, 1), hm), H, 0, 0.06, -0.05);
+  if (hair === "pony") { cap(); const t = put(new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.32, 4, 8), hm), H, 0, -0.05, -0.24); t.rotation.x = 0.5; }
+  if (hair === "mohawk") for (let k = 0; k < 5; k++) put(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.2, 5), hm), H, 0, 0.2 - Math.abs(k - 2) * 0.03, 0.12 - k * 0.07);
+  // Top
+  const top = WARDROBE.top[o.top[0]].id, pat = PATTERNS[o.top[2] || 0]?.id || "plain";
+  const tm = new THREE.MeshStandardMaterial({ map: patternTex(C("top"), pat), roughness: 0.65 });
+  const shell = (rt, rb, h = 0.6) => put(new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 16), tm), m.rig, 0, 1.2, 0);
+  const sleeves = (len, r = 0.08) => m.arms.forEach((a) => put(new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 10), tm), a, 0, -len / 2 + 0.03, 0));
+  if (top === "tee") { shell(0.225, 0.2); sleeves(0.2); }
+  if (top === "tank") shell(0.215, 0.195);
+  if (top === "hoodie") { shell(0.25, 0.23); sleeves(0.48, 0.09); const hood = put(new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8, 0, Math.PI * 2, 0, 1.6), tm), m.rig, 0, 1.52, -0.13); hood.rotation.x = -0.9; put(new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.04), tm), m.rig, 0, 1.03, 0.22); }
+  if (top === "jacket") { shell(0.235, 0.21); sleeves(0.46, 0.085); put(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.04), white), m.rig, 0, 1.2, 0.21); for (const s of [-1, 1]) { const l = put(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.03), tm), m.rig, s * 0.09, 1.4, 0.21); l.rotation.z = s * 0.4; } }
+  if (top === "blazer") { shell(0.23, 0.2); sleeves(0.46, 0.08); const shirt = put(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.36, 3), white), m.rig, 0, 1.33, 0.19); shirt.rotation.x = Math.PI; for (const s of [-1, 1]) { const b = put(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 6), black), m.rig, s * 0.04, 1.46, 0.22); b.rotation.z = s * Math.PI / 2; } }
+  if (top === "bodice") { shell(0.205, 0.16, 0.56); put(new THREE.Mesh(new THREE.OctahedronGeometry(0.045), goldM), m.rig, 0, 1.38, 0.2); }
+  if (top === "sweater") { shell(0.26, 0.24); sleeves(0.48, 0.095); const neck = put(new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.05, 8, 16), tm), m.rig, 0, 1.51, 0); neck.rotation.x = Math.PI / 2; }
+  if (top === "suit") { shell(0.27, 0.25, 0.62); sleeves(0.48, 0.1); put(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.05), mat("#2a2a3a", { emissive: "#3dc6ff", emissiveIntensity: 0.6 })), m.rig, 0, 1.28, 0.25); const ring = put(new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.04, 8, 18), mat("#c9c3d6", { metalness: 0.8, roughness: 0.3 })), m.rig, 0, 1.52, 0); ring.rotation.x = Math.PI / 2; }
+  // Bottom
+  const bottom = WARDROBE.bottom[o.bottom[0]].id, bm = mat(C("bottom"), { roughness: 0.6 });
+  const hips = (r = 0.2) => put(new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.16, 14), bm), m.rig, 0, 0.92, 0);
+  const legWear = (len, r = 0.088) => m.legs.forEach((l) => put(new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.92, len, 10), bm), l, 0, -len / 2, 0));
+  if (bottom === "pants") { hips(); legWear(0.74); }
+  if (bottom === "shorts") { hips(); legWear(0.28, 0.1); }
+  if (bottom === "skirt") put(new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.38, 0.42, 18, 1, true), bm), m.rig, 0, 0.78, 0).material.side = THREE.DoubleSide;
+  if (bottom === "gown") put(new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.55, 0.96, 20), bm), m.rig, 0, 0.47, 0);
+  if (bottom === "tights") { hips(0.195); legWear(0.76, 0.082); put(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.42), goldM), m.rig, 0, 0.99, 0); }
+  // Shoes
+  const shoe = WARDROBE.shoes[o.shoes[0]].id, sm = mat(C("shoes"), { roughness: 0.45 });
+  m.legs.forEach((l) => {
+    if (shoe === "sneakers") { put(new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.08, 0.26), sm), l, 0, -0.84, 0.05); put(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.27), white), l, 0, -0.885, 0.05); }
+    if (shoe === "boots") { put(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.3, 10), sm), l, 0, -0.74, 0); put(new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.08, 0.22), sm), l, 0, -0.86, 0.05); }
+    if (shoe === "sandals") { put(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.025, 0.24), sm), l, 0, -0.89, 0.05); put(new THREE.Mesh(new THREE.BoxGeometry(0.125, 0.03, 0.04), sm), l, 0, -0.85, 0.08); }
+    if (shoe === "heels") { put(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.2), sm), l, 0, -0.84, 0.06); put(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.09, 6), sm), l, 0, -0.88, -0.03); }
+    if (shoe === "moon") put(new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.12, 0.3, 12), sm), l, 0, -0.78, 0.02);
+  });
+  // Extra
+  const ex = WARDROBE.extra[o.extra[0]].id, em = mat(C("extra"), { roughness: 0.45 });
+  if (ex === "shades") { for (const s of [-1, 1]) put(new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.06, 0.02), mat("#111", { metalness: 0.6, roughness: 0.2 })), H, s * 0.07, 0.03, 0.19); put(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.015, 0.015), em), H, 0, 0.05, 0.19); }
+  if (ex === "sunhat") { put(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.02, 24), em), H, 0, 0.13, 0); put(new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 8, 0, Math.PI * 2, 0, 1.5), em), H, 0, 0.12, 0); }
+  if (ex === "crown") { put(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.1, 12, 1, true), goldM), H, 0, 0.21, 0); for (let k = 0; k < 6; k++) put(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 5), goldM), H, Math.sin(k) * 0.15, 0.3, Math.cos(k) * 0.15); }
+  if (ex === "helmet") put(new THREE.Mesh(new THREE.SphereGeometry(0.31, 20, 14), new THREE.MeshStandardMaterial({ color: "#cfefff", transparent: true, opacity: 0.25, roughness: 0.05, metalness: 0.3 })), H, 0, 0, 0);
+  if (ex === "scarf") { const s = put(new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.055, 8, 18), em), m.rig, 0, 1.52, 0); s.rotation.x = Math.PI / 2; put(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.32, 0.05), em), m.rig, 0.08, 1.33, 0.2); }
+  if (ex === "cape") { const c = put(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.42, 1.0, 16, 1, true, Math.PI * 0.6, Math.PI * 0.8), em), m.rig, 0, 1.0, -0.04); c.material.side = THREE.DoubleSide; }
+  if (ex === "wings") for (const s of [-1, 1]) { const w = put(new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 8), new THREE.MeshStandardMaterial({ color: C("extra"), transparent: true, opacity: 0.6, roughness: 0.2 })), m.rig, s * 0.24, 1.35, -0.26); w.scale.set(1, 1.4, 0.12); w.rotation.z = s * -0.5; }
+  if (ex === "antenna") for (const s of [-1, 1]) { const a = put(new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.3, 6), black), H, s * 0.08, 0.3, 0); a.rotation.z = s * -0.3; put(new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), em), H, s * 0.13, 0.44, 0); }
+  if (ex === "witch") { put(new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.02, 24), em), H, 0, 0.14, 0); const h2 = put(new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.5, 16), em), H, 0, 0.39, -0.03); h2.rotation.x = -0.15; }
+  if (ex === "flower") { for (let k = 0; k < 5; k++) put(new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), em), H, 0.19 + Math.cos(k * 1.26) * 0.05, 0.1 + Math.sin(k * 1.26) * 0.05, 0.02); put(new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), mat("#ffd166")), H, 0.2, 0.1, 0.04); }
+  if (ex === "phones") { put(new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.02, 6, 20, Math.PI), em), H, 0, 0.02, 0); for (const s of [-1, 1]) put(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.06, 12).rotateZ(Math.PI / 2), em), H, s * 0.2, 0, 0); }
+}
+/** Pose a model. mode: "idle", "walk" (a strut) or "pose" (its signature pose, k = 0..1 through it). */
+function animate(m, t, mode, k, poseIdx) {
+  let ry = 0, rz = 0, y = 0, aL = [0.1, 0, 0.12], aR = [0.1, 0, -0.12], lL = 0, lR = 0, head = 0;
+  if (mode === "walk") {
+    const s = Math.sin(t * 9);
+    lL = s * 0.45; lR = -s * 0.45; aL = [-s * 0.35, 0, 0.15]; aR = [s * 0.35, 0, -0.15]; rz = s * 0.06; y = Math.abs(Math.cos(t * 9)) * 0.03;
+  } else if (mode === "pose") {
+    const e = Math.min(1, k * 4), id = POSES[poseIdx]?.id || "wave", w = Math.sin(t * 12) * 0.35;
+    if (id === "wave") { aR = [0, 0, -2.6 * e + w * e]; head = 0.15 * e; }
+    if (id === "hips") { aL = [0, 0, 0.9 * e]; aR = [0, 0, -0.9 * e]; rz = 0.08 * e; ry = 0.3 * e; }
+    if (id === "point") { aR = [-1.6 * e, 0, -0.3 * e]; ry = -0.25 * e; head = -0.1 * e; }
+    if (id === "spin") { ry = Math.min(1, k * 1.6) * Math.PI * 2; aL = [0, 0, 1.4 * e]; aR = [0, 0, -1.4 * e]; }
+    if (id === "flex") { aL = [0, 0, 1.9 * e]; aR = [0, 0, -1.9 * e]; y = 0.05 * e; }
+    if (id === "heart") { aL = [0, 0, 2.8 * e]; aR = [0, 0, -2.8 * e]; y = Math.abs(Math.sin(k * Math.PI * 3)) * 0.15; }
+  } else { const s = Math.sin(t * 2); rz = s * 0.02; aL[2] += s * 0.03; aR[2] -= s * 0.03; }
+  if (m.pop > 0) { y += Math.sin(m.pop * Math.PI) * 0.15; m.pop = Math.max(0, m.pop - 0.05); }
+  m.rig.position.y = y; m.rig.rotation.set(0, ry, rz);
+  m.arms[0].rotation.set(...aL); m.arms[1].rotation.set(...aR);
+  m.legs[0].rotation.x = lL; m.legs[1].rotation.x = lR;
+  m.head.rotation.set(0, 0, head);
+}
+const models = new Map(); // id -> model, for everyone on the show (and "me" in the dressing room)
+function modelOf(id) {
+  let m = models.get(id);
+  if (!m) { m = makeModel(); const el = document.createElement("div"); el.className = "tag"; $("tags").appendChild(el); m.tag = el; models.set(id, m); }
+  return m;
+}
+const proj = new THREE.Vector3();
+function placeTag(m, label, color, show) {
+  proj.set(m.g.position.x, m.g.position.y + 2.15, m.g.position.z).project(camera);
+  if (!show || proj.z > 1) { m.tag.style.display = "none"; return; }
+  m.tag.style.display = "";
+  if (m.tag.textContent !== label) m.tag.textContent = label;
+  m.tag.style.color = color;
+  m.tag.style.transform = `translate(-50%, -100%) translate(${((proj.x + 1) / 2) * innerWidth}px, ${((1 - proj.y) / 2) * innerHeight}px)`;
+}
+
+// ── SHOW (HOST) ─────────────────────────────────────────────────────────────────────
+const host = { last: null, was: false, bots: [], showId: 0, lastBots: 0 };
+/** The show as state has it, or the host's own newer write that hasn't come back yet. `v` only goes up. */
+function showState() {
+  const r = cached("show", S.shared.show, null);
+  return host.last && isHost() && (!r || host.last.v > r.v) ? host.last : r;
+}
+function writeShow(r) { r = { ...r, v: Math.max(showState()?.v ?? 0, cached("show", S.shared.show, null)?.v ?? 0) + 1 }; host.last = r; net.setShared("show", JSON.stringify(r)); return r; }
+const humans = () => livePlayers().filter((id) => !(ATTRACT && id !== net.sessionId));
+function newShow(id, prevTheme = -1) {
+  let th = Math.floor(Math.random() * THEMES.length);
+  if (th === prevTheme) th = (th + 1) % THEMES.length;
+  return { id, phase: "theme", th, endsAt: Date.now() + CONFIG.themeMs, order: [], i: 0, at: 0, sc: {}, res: [] };
+}
+/** Bots for a new show: names, colors, and outfits picked mostly from pieces that fit the theme. */
+function makeBots(r) {
+  const want = Math.max(0, CONFIG.seats - humans().length), names = [...BOT_NAMES].sort(() => Math.random() - 0.5);
+  const taken = new Set([...Object.values(S.entities.players || {}).map((p) => p.c), myColor]), free = COLORS.filter((c) => !taken.has(c));
+  return Array.from({ length: want }, (_, i) => ({ i: "bot" + i, n: names[i % names.length], c: free[i] || COLORS[(i + 3) % COLORS.length], o: randomOutfit(THEMES[r.th], Math.random, CONFIG.botTaste * (0.6 + Math.random() * 0.4)) }));
+}
+function adopt() {
+  host.was = true;
+  const r = showState(), b = cached("bots", S.shared.bots, null);
+  host.showId = r ? r.id : 0;
+  host.bots = r && b && b.r === r.id && Array.isArray(b.list) ? b.list.map((x) => ({ ...x })) : [];
+}
+function botList(r) {
+  if (isHost() && host.was) return host.bots;
+  const b = cached("bots", S.shared.bots, null);
+  return r && b && b.r === r.id && Array.isArray(b.list) ? b.list : [];
+}
+/** Anyone on the show: { id, name, color, o (outfit), bot }. */
+function who(r, id) {
+  const b = botList(r).find((x) => x.i === id);
+  if (b) return { id, name: b.n, color: b.c, o: b.o, bot: true };
+  if (id === net.sessionId) return { id, name: myName, color: myColor, o: me.o };
+  const p = S.entities.players[id];
+  return p ? { id, name: String(p.n || "Player"), color: p.c || "#ccc", o: cached("o:" + id, p.o, null) } : null;
+}
+/** A bot's stars for a look: how well it fits the theme, plus a bit of taste. */
+const botStars = (o, theme) => Math.max(1, Math.min(5, Math.round(1.4 + themeFit(o, theme) * 3.8 + (Math.random() - 0.5) * 1.6)));
+/** Add up everyone's stars for model n of the show. */
+function tally(r, n) {
+  const id = r.order[n] && r.order[n][0], theme = THEMES[r.th];
+  if (!id) return r.sc;
+  let sum = 0, cnt = 0;
+  for (const h of humans()) {
+    if (h === id) continue;
+    const rt = h === net.sessionId ? me.rate : cached("rate:" + h, S.entities.players[h]?.rate, null), s = rt && rt.r === r.id ? +rt.s?.[id] : 0;
+    if (s >= 1 && s <= 5) { sum += s; cnt++; }
+  }
+  const look = who(r, id);
+  for (const b of host.bots) if (b.i !== id && look) { sum += botStars(look.o, theme); cnt++; }
+  return { ...r.sc, [id]: [sum, cnt] };
+}
+const avgOf = (sc) => (sc && sc[1] ? sc[0] / sc[1] : 0);
+function hostTick(now) {
+  if (!host.was) adopt();
+  let r = showState();
+  const t = Date.now();
+  if (!r) r = writeShow(newShow(1));
+  if (host.showId !== r.id) { host.showId = r.id; host.bots = makeBots(r); host.lastBots = 0; } // a new show: new bot looks
+  if (r.phase === "theme" && t >= r.endsAt) r = writeShow({ ...r, phase: "dress", endsAt: t + CONFIG.dressMs });
+  else if (r.phase === "dress") {
+    const people = humans(), ready = people.length && people.every((id) => +(id === net.sessionId ? me.rdy : S.entities.players[id]?.rdy) === r.id * 10 + 1);
+    if (t >= r.endsAt || (ready && !ATTRACT)) {
+      host.bots = host.bots.slice(0, Math.max(0, CONFIG.seats - people.length)); host.lastBots = 0; // friends who arrived while dressing take a bot's place
+      const line = [...people.map((id) => who(r, id)).filter(Boolean), ...host.bots.map((b) => who(r, b.i))].sort(() => Math.random() - 0.5);
+      r = writeShow({ ...r, phase: "walk", order: line.map((x) => [x.id, x.name.slice(0, 16), x.color]), i: 0, at: t, endsAt: t + CONFIG.walkMs * line.length });
+    }
+  } else if (r.phase === "walk") {
+    const cur = r.order[r.i], gone = cur && !host.bots.some((b) => b.i === cur[0]) && !humans().includes(cur[0]);
+    if (t >= r.at + CONFIG.walkMs || gone) { // this walk is over: count the stars, next model
+      const sc = gone ? r.sc : tally(r, r.i), i = r.i + 1;
+      if (i < r.order.length) r = writeShow({ ...r, sc, i, at: t });
+      else {
+        const res = r.order.filter(([id]) => sc[id]).map(([id, n, c]) => [id, n, c, Math.round(avgOf(sc[id]) * 100), Math.round(themeFit(who(r, id)?.o, THEMES[r.th]) * 100)]).sort((a, b) => b[3] - a[3] || b[4] - a[4]);
+        r = writeShow({ ...r, sc, i, phase: "podium", res, endsAt: t + CONFIG.podiumMs });
+      }
+    }
+  } else if (r.phase === "podium") {
+    const people = humans(), ready = people.length && people.every((id) => +(id === net.sessionId ? me.rdy : S.entities.players[id]?.rdy) === r.id * 10 + 2);
+    if (t >= r.endsAt || (ready && !ATTRACT)) r = writeShow(newShow(r.id + 1, r.th));
+  }
+  if (now - host.lastBots > 2000) { host.lastBots = now; net.setShared("bots", JSON.stringify({ r: r.id, list: host.bots })); } // bots only change between shows; resent now and then
+}
+
+// ── ME ──────────────────────────────────────────────────────────────────────────────
+let myName = "";
+try { myName = localStorage.getItem("mpa-name") || ""; } catch {}
+myName = myName || NAME_A[Math.floor(Math.random() * NAME_A.length)] + " " + NAME_B[Math.floor(Math.random() * NAME_B.length)];
+let myColor = COLORS[0]; // picked on join: the first color nobody in the room has
+const me = { o: randomOutfit(null), rate: { r: -1, s: {} }, rdy: 0, tab: "hair", showId: -1, submitted: -1, autoAt: 0 };
+function sendOutfit() { net.me.set("o", JSON.stringify(me.o)); }
+function choose(slot, idx) { me.o[slot] = [idx, me.o[slot][1], ...(slot === "top" ? [me.o.top[2] || 0] : [])]; sendOutfit(); click(); drawDress(); }
+function dye(slot, sw) { me.o[slot] = [me.o[slot][0], sw, ...(slot === "top" ? [me.o.top[2] || 0] : [])]; sendOutfit(); click(); drawDress(); }
+function rate(id, stars) {
+  const r = showState();
+  if (!r || r.phase !== "walk" || id === net.sessionId) return;
+  if (me.rate.r !== r.id) me.rate = { r: r.id, s: {} };
+  me.rate.s[id] = stars; net.me.set("rate", JSON.stringify(me.rate)); click(); drawRate(r, true);
+}
+function setReady(phaseCode) { const r = showState(); if (!r) return; me.rdy = r.id * 10 + phaseCode; net.me.set("rdy", me.rdy); click(); }
+/** ?attract: dress yourself at speed, so the preview shows the dressing room. */
+function autopilot(r, now) {
+  if (!ATTRACT || r.phase !== "dress" || now < me.autoAt) return;
+  me.autoAt = now + 260;
+  const slot = pickOf(SLOTS, Math.random), theme = THEMES[r.th], o = randomOutfit(theme, Math.random, 0.8);
+  me.o[slot] = o[slot]; if (slot === "top") me.o.top[2] = o.top[2]; me.o.p = o.p; sendOutfit();
+}
+
+// ── HUD ─────────────────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const touchUI = matchMedia("(pointer: coarse)").matches;
+const TABS = [["hair", "💇 Hair"], ["top", "👕 Top"], ["bottom", "👖 Bottom"], ["shoes", "👟 Shoes"], ["extra", "✨ Extra"], ["pose", "💃 Pose"]];
+$("tabs").innerHTML = TABS.map(([id, label]) => `<button data-t="${id}">${label}</button>`).join("");
+$("tabs").onclick = (e) => { const b = e.target.closest("button"); if (b) { me.tab = b.dataset.t; click(); drawDress(); } };
+$("rand").onclick = () => { const r = showState(); me.o = randomOutfit(r ? THEMES[r.th] : null, Math.random, 0.5); sendOutfit(); click(); drawDress(); };
+$("ready").onclick = () => setReady(1);
+$("again").onclick = () => setReady(2);
+/** The dressing panel: tabs, the pieces for this tab (theme matches marked), patterns and colors. */
+function drawDress() {
+  const r = showState(), theme = r ? THEMES[r.th] : null, slot = me.tab;
+  [...$("tabs").children].forEach((b) => b.classList.toggle("on", b.dataset.t === slot));
+  if (slot === "pose") {
+    $("opts").innerHTML = POSES.map((p, i) => `<button class="chip ${me.o.p === i ? "on" : ""}" data-i="${i}">${p.label}</button>`).join("");
+    $("opts").onclick = (e) => { const b = e.target.closest("button"); if (b) { me.o.p = +b.dataset.i; sendOutfit(); click(); drawDress(); } };
+    $("sw").innerHTML = ""; $("pats").innerHTML = "";
+  } else {
+    $("opts").innerHTML = WARDROBE[slot].map((it, i) => `<button class="chip ${me.o[slot][0] === i ? "on" : ""}" data-i="${i}">${esc(it.label)}${theme && it.tags.some((t) => theme.tags.includes(t)) ? "<small>★ on theme</small>" : ""}</button>`).join("");
+    $("opts").onclick = (e) => { const b = e.target.closest("button"); if (b) choose(slot, +b.dataset.i); };
+    $("sw").innerHTML = SWATCH.map((c, i) => `<button class="${me.o[slot][1] === i ? "on" : ""}" data-i="${i}" style="background:${c}" aria-label="color ${i + 1}"></button>`).join("");
+    $("sw").onclick = (e) => { const b = e.target.closest("button"); if (b) dye(slot, +b.dataset.i); };
+    $("pats").innerHTML = slot === "top" ? PATTERNS.map((p, i) => `<button class="chip ${(me.o.top[2] || 0) === i ? "on" : ""}" data-i="${i}">${p.label}</button>`).join("") : "";
+    $("pats").onclick = (e) => { const b = e.target.closest("button"); if (b) { me.o.top[2] = +b.dataset.i; sendOutfit(); click(); drawDress(); } };
+  }
+  const isReady = r && me.rdy === r.id * 10 + 1;
+  $("ready").textContent = isReady ? "Ready ✓ (waiting)" : "I'm ready";
+  $("ready").classList.toggle("done", !!isReady);
+}
+$("stars").innerHTML = [1, 2, 3, 4, 5].map((n) => `<button data-n="${n}" aria-label="${n} stars">★</button>`).join("");
+$("stars").onclick = (e) => { const b = e.target.closest("button"), r = showState(); if (b && r && r.order[r.i]) rate(r.order[r.i][0], +b.dataset.n); };
+/** The star buttons for whoever is walking now. */
+function drawRate(r, force) {
+  const cur = r.order[r.i], key = r.id + ":" + r.i + ":" + (me.rate.r === r.id && cur ? me.rate.s[cur[0]] || 0 : 0);
+  if (!force && $("rate").dataset.k === key) return;
+  $("rate").dataset.k = key;
+  if (!cur) return;
+  const mine = cur[0] === net.sessionId, given = me.rate.r === r.id ? me.rate.s[cur[0]] || 0 : 0;
+  $("rateQ").innerHTML = mine ? "You're on the runway! Work it." : `Rate <b style="color:${esc(cur[2])}">${esc(cur[1])}</b>'s look`;
+  $("stars").hidden = mine;
+  [...$("stars").children].forEach((b, i) => b.classList.toggle("on", i < given));
+}
+let toastTimer = 0;
+function toast(text) { $("toast").textContent = text; $("toast").style.opacity = 1; clearTimeout(toastTimer); toastTimer = setTimeout(() => ($("toast").style.opacity = 0), 1600); }
+let board = null, boardFor = -1;
+function hud(r) {
+  const t = Date.now(), theme = THEMES[r.th], left = Math.max(0, Math.ceil((r.endsAt - t) / 1000)), n = livePlayers().length;
+  const netText = net.offline ? "Offline: playing with bots" : netDown ? "Reconnecting…" : `Online · ${n} player${n === 1 ? "" : "s"}${isHost() ? " · you run the show" : ""}`;
+  const dressing = r.phase === "dress" && !ATTRACT, walking = r.phase === "walk" && !ATTRACT, over = r.phase === "podium" && !ATTRACT;
+  if (ATTRACT) $("top").innerHTML = "";
+  else {
+    const status = r.phase === "theme" ? "Get ready…" : r.phase === "dress" ? `Dressing room · ${left}s` : r.phase === "walk" ? `On the runway · ${Math.min(r.i + 1, r.order.length)} of ${r.order.length}` : `Next show in ${left}s`;
+    $("top").innerHTML = `<b><em>Runway</em> · ${esc(theme.name)}</b><span>${status}</span><span id="net">${netText}</span>`;
+  }
+  $("big").innerHTML = r.phase === "theme" || (ATTRACT && r.phase === "dress" && t - (r.endsAt - CONFIG.dressMs) < 900) ? `<small>TODAY'S THEME</small><b>${esc(theme.name)}</b>` : "";
+  if ($("dress").hidden === dressing) { $("dress").hidden = !dressing; if (dressing) drawDress(); }
+  $("rate").hidden = !walking;
+  if (walking) drawRate(r);
+  $("over").hidden = !over;
+  if (over) drawResults(r, left);
+}
+function drawResults(r, left) {
+  const res = r.res || [], top = res[0];
+  $("winner").textContent = top ? (top[0] === net.sessionId ? "You win the show!" : `${top[1]} wins the show!`) : "Show's over";
+  $("winSub").textContent = `${THEMES[r.th].name} · average stars`;
+  $("results").innerHTML = res.map((x) => `<li class="${x[0] === net.sessionId ? "me" : ""}"><b style="color:${esc(x[2])}">●</b> ${esc(x[0] === net.sessionId ? "You" : x[1])}<span>★ ${(x[3] / 100).toFixed(1)}</span></li>`).join("");
+  $("next").textContent = me.rdy === r.id * 10 + 2 ? `Waiting for the others… ${left}s` : `Next show in ${left}s`;
+  if (boardFor !== r.id) { boardFor = r.id; showBoard(r); }
+}
+function showBoard(r) {
+  const list = $("board");
+  if (!board) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
+  const mine = (r.res || []).find((x) => x[0] === net.sessionId), submit = mine && mine[3] > 0 ? board.submit(mine[3]).catch(() => null) : Promise.resolve();
+  submit.then(() => board.top(10)).then(({ entries }) => {
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>★ ${(e.score / 100).toFixed(2)}</span></li>`).join("") : "<li>No looks yet. Be the first.</li>";
+  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+}
+/** Keep a color nobody else has: the later sessionId gives way, and the bots' colors count as taken. */
+function fixColor() {
+  const others = Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId), bots = botList(showState()).map((b) => b.c);
+  if (!others.some(([id, p]) => id < net.sessionId && p.c === myColor) && !bots.includes(myColor)) return;
+  const used = new Set([...others.map(([, p]) => p.c), ...bots]);
+  myColor = COLORS.find((c) => !used.has(c)) || myColor;
+  net.me.set("c", myColor);
+}
+addEventListener("keydown", (e) => {
+  unlockAudio();
+  const r = showState(); if (!r) return;
+  if (r.phase === "walk" && /^[1-5]$/.test(e.key) && r.order[r.i]) rate(r.order[r.i][0], +e.key);
+  if (r.phase === "dress" && e.key.toLowerCase() === "r") $("rand").click();
+  if (r.phase === "dress" && e.key === "Enter") setReady(1);
+});
+addEventListener("pointerdown", unlockAudio);
+// Drag on the dressing room to turn your model.
+let spinVel = 0, dragX = null;
+renderer.domElement.addEventListener("pointerdown", (e) => { e.preventDefault(); dragX = e.clientX; });
+renderer.domElement.addEventListener("pointermove", (e) => { if (dragX !== null) { spinVel = (e.clientX - dragX) * 0.01; me.spin += spinVel; dragX = e.clientX; } });
+for (const ev of ["pointerup", "pointercancel", "pointerleave"]) renderer.domElement.addEventListener(ev, () => { dragX = null; });
+me.spin = 0;
+
+// ── SOUND ───────────────────────────────────────────────────────────────────────────
+let AC = null, master = null, noise = null, nextBeat = 0, beatNo = 0;
+function unlockAudio() {
+  if (AC || ATTRACT) return;
+  try {
+    AC = new AudioContext(); master = AC.createGain(); master.gain.value = 0.45; master.connect(AC.destination);
+    noise = AC.createBuffer(1, AC.sampleRate, AC.sampleRate); const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  } catch { AC = null; }
+}
+function tone(f, len, type, vol, f2, at = 0) {
+  if (!AC) return;
+  const t0 = AC.currentTime + at, o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + len);
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + len); o.connect(g).connect(master); o.start(t0); o.stop(t0 + len + 0.05);
+}
+function hiss(len, vol, hp, at = 0) {
+  if (!AC) return;
+  const t0 = AC.currentTime + at, s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  s.buffer = noise; f.type = "highpass"; f.frequency.value = hp; g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + len); s.connect(f).connect(g).connect(master); s.start(t0, Math.random() * 0.5); s.stop(t0 + len + 0.02);
+}
+const click = () => tone(1400, 0.06, "triangle", 0.12, 900);
+const shutter = () => { hiss(0.05, 0.25, 3000); hiss(0.04, 0.2, 5000, 0.07); };
+const applause = () => { for (let i = 0; i < 40; i++) hiss(0.06, 0.08 + Math.random() * 0.08, 1500 + Math.random() * 3000, Math.random() * 2.2); };
+/** The runway beat: kick, hats and a bass line at 120 BPM, scheduled a step ahead. Softer chords in the dressing room. */
+function music(r, now) {
+  if (!AC || !r) return;
+  if (now < nextBeat) return;
+  nextBeat = now + 250; beatNo++;
+  const s = beatNo % 16, bass = [41, 41, 48, 46][Math.floor(beatNo / 16) % 4];
+  if (r.phase === "walk" || r.phase === "podium") {
+    if (s % 4 === 0) tone(140, 0.25, "sine", 0.8, 45);
+    if (s % 4 === 2) hiss(0.04, 0.12, 7000);
+    if (s % 8 === 4) hiss(0.12, 0.2, 1200);
+    if (s % 2 === 0) tone(440 * Math.pow(2, (bass - 69) / 12), 0.2, "sawtooth", 0.06, 0);
+  } else if (r.phase === "dress" && s % 8 === 0) for (const x of [0, 4, 7, 11]) tone(440 * Math.pow(2, (bass + 24 + x - 69) / 12), 1.8, "sine", 0.03, 0);
+}
+
+// ── MAIN LOOP ───────────────────────────────────────────────────────────────────────
+let last = performance.now(), lastHb = 0, lastHud = 0, prev = null, lastSendO = 0;
+const camPos = new THREE.Vector3(0, 3, 8), camLook = new THREE.Vector3(0, 1, -4), wantPos = new THREE.Vector3(), wantLook = new THREE.Vector3();
+/** Where the walking model is at time `t` into its walk: out to the front, pose, back to its spot in the line. */
+function walkPath(k, spot) {
+  const W = CONFIG.walkMs, out = 0.43, pose = 0.3; // shares of the walk
+  if (k < out) { const e = k / out; return { x: 0, z: RUN_BACK + (RUN_FRONT - RUN_BACK) * e, h: 0, mode: "walk" }; }
+  if (k < out + pose) return { x: 0, z: RUN_FRONT, h: 0, mode: "pose", pk: (k - out) / pose };
+  const e = (k - out - pose) / (1 - out - pose);
+  return { x: spot.x * e, z: RUN_FRONT + (spot.z - RUN_FRONT) * e, h: Math.PI, mode: "walk" };
+}
+/** Spot n in the line of models standing at the back of the stage after their walk. */
+const lineSpot = (n, of) => ({ x: (n - (of - 1) / 2) * 1.05, z: -11.6 });
+function frame(now) {
+  requestAnimationFrame(frame);
+  const realNow = performance.now(); // timed on the real clock: after a long freeze the rAF time can be from before the wake
+  if (realNow - lastTick > 1000) { hostHold = realNow + 700; host.was = false; host.last = null; } // woke from a freeze or a background tab: let the newer state arrive, then adopt it like a new host
+  lastTick = realNow;
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)), t = now / 1000; last = now; // never negative: the first frame can be stamped before `last`
+  if (now - lastHb > 1000) { lastHb = now; net.me.set("hb", Date.now()); }
+  if (isHost()) hostTick(now); else host.was = false;
+  const r = showState();
+  if (!r) { renderer.render(scene, camera); return; }
+  if (me.showId !== r.id) { me.showId = r.id; me.rate = { r: r.id, s: {} }; prev = null; }
+  autopilot(r, now);
+  const theme = THEMES[r.th]; paintBackdrop(theme);
+  const inRoom = r.phase === "dress";
+  room.visible = inRoom; show.visible = !inRoom; podium.visible = r.phase === "podium";
+  const seen = new Set();
+  let hype = 0.2;
+  if (inRoom) { // the dressing room: just you on the turntable
+    const m = modelOf("me"); seen.add("me"); dress(m, me.o);
+    me.spin += dragX === null ? dt * 0.5 : 0;
+    m.g.position.set(DR.x, 0.18, DR.z); m.g.rotation.y = me.spin; animate(m, t, "idle", 0, me.o.p);
+    placeTag(m, "", "#fff", false);
+    const tall = camera.aspect < 0.9, panel = !ATTRACT && touchUI || innerWidth <= 760;
+    wantPos.set(DR.x + (panel || ATTRACT ? 0 : 0.9), tall ? 1.6 : 1.3, DR.z + (tall ? 5.2 : ATTRACT ? 3.1 : 3.4)); wantLook.set(DR.x + (panel || ATTRACT ? 0 : 0.9), tall ? (panel ? 0.35 : 0.95) : 1.08, 0);
+  } else {
+    // Everyone in the walk order: the one walking now, the ones who walked (in the line at the back), the rest waiting off-stage.
+    const order = r.phase === "walk" || r.phase === "podium" ? r.order : [], k = r.phase === "walk" ? Math.min(1, (Date.now() - r.at) / CONFIG.walkMs) : 1;
+    order.forEach(([id, name, color], n) => {
+      const look = who(r, id); if (!look || !validOutfit(look.o)) return;
+      const m = modelOf(id); seen.add(id); dress(m, look.o);
+      let pos, mode = "idle", pk = 0, label = "";
+      const podiumPlace = r.phase === "podium" ? (r.res || []).findIndex((x) => x[0] === id) : -1;
+      if (podiumPlace >= 0 && podiumPlace < 3) { const p = PODIUM[podiumPlace]; pos = { x: p.x, y: RUN_Y + p.h, z: -10.6, h: 0 }; mode = podiumPlace === 0 ? "pose" : "idle"; pk = ((t * 1000) % 2400) / 2400; label = `${["🥇", "🥈", "🥉"][podiumPlace]} ${id === net.sessionId ? "You" : name}`; }
+      else if (r.phase === "walk" && n === r.i) { const w = walkPath(k, lineSpot(n, order.length)); pos = { ...w, y: RUN_Y }; mode = w.mode; pk = w.pk || 0; label = id === net.sessionId ? "You" : name; hype = mode === "pose" ? 1 : 0.6; }
+      else if (r.phase === "podium" || n < r.i) { const s = lineSpot(n, order.length); pos = { x: s.x, y: RUN_Y, z: s.z - (r.phase === "podium" ? 1.2 : 0), h: 0 }; }
+      else pos = { x: 0, y: -20, z: -30, h: 0 }; // waiting backstage
+      m.g.position.set(pos.x, pos.y, pos.z); m.g.rotation.y = pos.h;
+      animate(m, t, mode, pk, look.o.p);
+      placeTag(m, label, color, !!label && !ATTRACT);
+    });
+    if (r.phase === "podium") hype = 0.8;
+  }
+  for (const [id, m] of models) if (!seen.has(id)) { m.g.visible = false; m.tag.style.display = "none"; } else m.g.visible = true;
+  // One-off effects from what changed in state: a new model on the runway, their stars, the winner.
+  if (prev && prev.id === r.id) {
+    if (r.phase === "walk" && prev.phase === "walk" && r.i !== prev.i) { const p = r.order[prev.i], s = r.sc[p && p[0]]; if (p && s && !ATTRACT) toast(`${p[0] === net.sessionId ? "You" : p[1]}: ★ ${avgOf(s).toFixed(1)}`); }
+    if (r.phase === "podium" && prev.phase !== "podium") { burst(0, 3, -10.6, 160, 8); applause(); }
+    if (r.phase !== prev.phase) beatNo = 0;
+  }
+  if (r.phase === "walk") { const k = (Date.now() - r.at) / CONFIG.walkMs; if (k > 0.43 && k < 0.73 && Math.random() < dt * 9) { popFlash(1 + Math.floor(Math.random() * 2)); if (Math.random() < 0.5) shutter(); } }
+  if (r.phase === "podium" && Math.random() < dt * 3) { burst((Math.random() - 0.5) * 4, 4, -10.6, 6, 4); popFlash(1); }
+  prev = r;
+  // Camera: the dressing room, or the end of the runway following the model.
+  if (!inRoom) {
+    const tall = camera.aspect < 0.9, cur = r.phase === "walk" ? models.get(r.order[r.i]?.[0]) : null;
+    if (r.phase === "podium") { const side = tall ? 0 : 1.7; wantPos.set(side, tall ? 3.6 : 3.3, tall ? 2 : -4.2); wantLook.set(side, tall ? 0.2 : 2.4, -10.6); } // (a tall phone looks from further back, so the podium sits above the card) // on wide screens the podium sits left of the results card
+    else if (cur) { const z = cur.g.position.z; wantPos.set(tall ? 0 : 1.6, 2.1, Math.max(z + (tall ? 6.5 : 4.6), -3)); wantLook.set(0, 1.4, z); }
+    else { wantPos.set(0, 3.2, tall ? 9 : 7.5); wantLook.set(0, 2.2, -10); }
+  }
+  const jump = camPos.distanceTo(wantPos) > 25;
+  camPos.lerp(wantPos, jump ? 1 : 1 - Math.pow(0.05, dt)); camLook.lerp(wantLook, jump ? 1 : 1 - Math.pow(0.03, dt));
+  camera.position.copy(camPos); camera.lookAt(camLook);
+  spot.target.position.copy(camLook).setY(RUN_Y); spot.position.set(camLook.x, 9, camLook.z + 5);
+  washA.intensity = 20 + Math.sin(t * 4) * 8 * hype; washB.intensity = 20 + Math.cos(t * 4) * 8 * hype;
+  animateFans(t, hype); animateConfetti(dt);
+  for (const f of flashes) { f.life -= dt; f.s.material.opacity = Math.max(0, f.life * 4); }
+  music(r, now);
+  renderer.render(scene, camera);
+  if (now - lastHud > 150) { lastHud = now; hud(r); fixColor(); }
+}
+
+(async function start() {
+  net = await connect();
+  net.onState((st) => { S = st; });
+  net.onDisconnect(() => { netDown = true; });
+  net.onReconnect(() => { netDown = false; });
+  if (!net.offline && typeof MP !== "undefined") board = MP.auth({ key: MP_CONNECT.key, apiUrl: MP_CONNECT.apiUrl }).leaderboard(CONFIG.board);
+  const taken = new Set([...Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId).map(([, p]) => p.c), ...botList(showState()).map((b) => b.c)]);
+  myColor = COLORS.find((c) => !taken.has(c)) || COLORS[Math.floor(Math.random() * COLORS.length)];
+  net.me.set({ n: myName, c: myColor, hb: Date.now(), o: JSON.stringify(me.o) });
+  if (QS.has("test")) window.__test = { showState, me, isHost, host, who, rate, choose, setReady };
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
