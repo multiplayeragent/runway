@@ -53,6 +53,7 @@
   .card h3 { margin: 12px 0 4px; font-size: 12px; color: var(--gold); text-transform: uppercase; letter-spacing: .08em; }
   .card ol { margin: 0; padding-left: 24px; font-size: 14px; } .card li { padding: 1px 0; } .card li span { float: right; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold); }
   .card li.me { color: var(--gold); }
+  .card li.note { list-style: none; margin-left: -24px; color: var(--dim); } /* a message, not a ranked row */
   .card p { margin: 8px 0 0; font-size: 13px; opacity: .8; text-align: center; }
   button.big { width: 100%; min-height: 48px; margin-top: 12px; border: 0; border-radius: 12px; background: var(--hot); color: #fff; font: 800 17px system-ui, sans-serif; cursor: pointer; }
 </style>
@@ -74,7 +75,7 @@
 <div id="rate" hidden><p id="rateQ"></p><div id="stars"></div></div>
 <div id="over" hidden><div class="card">
   <h2 id="winner"></h2><div class="sub" id="winSub"></div><ol id="results"></ol>
-  <h3>Best looks ever</h3><ol id="board"><li>Loading…</li></ol>
+  <h3>Best looks ever</h3><ol id="board"><li class="note">Loading…</li></ol>
   <button class="big" id="again">Next show</button><p id="next"></p>
 </div></div>
 <script type="module">
@@ -422,12 +423,12 @@ function dress(m, o) {
   const C = (slot) => SWATCH[o[slot][1]];
   // Hair
   const hm = mat(C("hair"), { roughness: 0.5 }), hair = WARDROBE.hair[o.hair[0]].id, H = m.head;
-  const cap = () => put(new THREE.Mesh(geo.cap, hm), H, 0, 0.015, -0.01);
+  const cap = () => { const c = put(new THREE.Mesh(geo.cap, hm), H, 0, 0.015, -0.01); c.rotation.x = -0.45; return c; }; // tipped back: a hairline above the eyes
   if (hair === "bob") { cap().scale.set(1.08, 1.05, 1.08); for (const s of [-1, 1]) put(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.22, 0.22), hm), H, s * 0.19, -0.06, -0.02); }
   if (hair === "spiky") { cap(); for (let k = 0; k < 8; k++) { const c = put(new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 6), hm), H, Math.sin(k * 0.8) * 0.12, 0.2, Math.cos(k * 0.8) * 0.12 - 0.02); c.rotation.set(Math.cos(k * 0.8) * 0.6, 0, -Math.sin(k * 0.8) * 0.6); } }
   if (hair === "long") { cap().scale.set(1.08, 1.05, 1.08); put(new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.55, 0.1), hm), H, 0, -0.22, -0.15); }
   if (hair === "bun") { cap(); put(new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), hm), H, 0, 0.2, -0.1); }
-  if (hair === "afro") put(new THREE.Mesh(new THREE.IcosahedronGeometry(0.31, 1), hm), H, 0, 0.06, -0.05);
+  if (hair === "afro") put(new THREE.Mesh(new THREE.IcosahedronGeometry(0.31, 1), hm), H, 0, 0.1, -0.15); // behind the face, not over it
   if (hair === "pony") { cap(); const t = put(new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.32, 4, 8), hm), H, 0, -0.05, -0.24); t.rotation.x = 0.5; }
   if (hair === "mohawk") for (let k = 0; k < 5; k++) put(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.2, 5), hm), H, 0, 0.2 - Math.abs(k - 2) * 0.03, 0.12 - k * 0.07);
   // Top
@@ -695,11 +696,11 @@ function drawResults(r, left) {
 }
 function showBoard(r) {
   const list = $("board");
-  if (!board) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
+  if (!board) { list.innerHTML = "<li class='note'>Leaderboards need a connection.</li>"; return; }
   const mine = (r.res || []).find((x) => x[0] === net.sessionId), submit = mine && mine[3] > 0 ? board.submit(mine[3]).catch(() => null) : Promise.resolve();
   submit.then(() => board.top(10)).then(({ entries }) => {
-    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>★ ${(e.score / 100).toFixed(2)}</span></li>`).join("") : "<li>No looks yet. Be the first.</li>";
-  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>★ ${(e.score / 100).toFixed(2)}</span></li>`).join("") : "<li class='note'>No looks yet. Be the first.</li>";
+  }).catch(() => { list.innerHTML = "<li class='note'>Couldn't load the leaderboard.</li>"; });
 }
 /** Keep a color nobody else has: the later sessionId gives way, and the bots' colors count as taken. */
 function fixColor() {
@@ -714,11 +715,12 @@ addEventListener("keydown", (e) => {
   const r = showState(); if (!r) return;
   if (r.phase === "walk" && /^[1-5]$/.test(e.key) && r.order[r.i]) rate(r.order[r.i][0], +e.key);
   if (r.phase === "dress" && e.key.toLowerCase() === "r") $("rand").click();
-  if (r.phase === "dress" && e.key === "Enter") setReady(1);
+  if (e.key === "Enter") { e.preventDefault(); if (r.phase === "dress") setReady(1); }
 });
 addEventListener("pointerdown", unlockAudio);
 // Drag on the dressing room to turn your model.
 let spinVel = 0, dragX = null;
+renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
 renderer.domElement.addEventListener("pointerdown", (e) => { e.preventDefault(); dragX = e.clientX; });
 renderer.domElement.addEventListener("pointermove", (e) => { if (dragX !== null) { spinVel = (e.clientX - dragX) * 0.01; me.spin += spinVel; dragX = e.clientX; } });
 for (const ev of ["pointerup", "pointercancel", "pointerleave"]) renderer.domElement.addEventListener(ev, () => { dragX = null; });
@@ -794,10 +796,10 @@ function frame(now) {
   if (inRoom) { // the dressing room: just you on the turntable
     const m = modelOf("me"); seen.add("me"); dress(m, me.o);
     me.spin += dragX === null ? dt * 0.5 : 0;
-    m.g.position.set(DR.x, 0.18, DR.z); m.g.rotation.y = me.spin; animate(m, t, "idle", 0, me.o.p);
+    m.g.position.set(DR.x, 0.18, DR.z); m.g.rotation.y = me.spin; animate(m, t, me.tab === "pose" ? "pose" : "idle", ((t * 1000) % 2400) / 2400, me.o.p); // on the Pose tab, strike it
     placeTag(m, "", "#fff", false);
     const tall = camera.aspect < 0.9, panel = !ATTRACT && touchUI || innerWidth <= 760;
-    wantPos.set(DR.x + (panel || ATTRACT ? 0 : 0.9), tall ? 1.6 : 1.3, DR.z + (tall ? 5.2 : ATTRACT ? 3.1 : 3.4)); wantLook.set(DR.x + (panel || ATTRACT ? 0 : 0.9), tall ? (panel ? 0.35 : 0.95) : 1.08, 0);
+    wantPos.set(DR.x + (panel || ATTRACT ? 0 : 0.9), tall ? 1.6 : 1.3, DR.z + (tall ? 5.9 : ATTRACT ? 3.1 : 3.9)); wantLook.set(DR.x + (panel || ATTRACT ? 0 : 0.9), tall ? (panel ? 0.35 : 0.95) : ATTRACT ? 1.08 : 1.15, 0);
   } else {
     // Everyone in the walk order: the one walking now, the ones who walked (in the line at the back), the rest waiting off-stage.
     const order = r.phase === "walk" || r.phase === "podium" ? r.order : [], k = r.phase === "walk" ? Math.min(1, (Date.now() - r.at) / CONFIG.walkMs) : 1;
