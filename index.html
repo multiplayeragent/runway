@@ -149,7 +149,7 @@ const THEMES = [
 const WARDROBE = {
   hair: [
     { id: "bob", label: "Bob", tags: ["formal", "fairy"] }, { id: "spiky", label: "Spiky", tags: ["rock", "sporty", "hero"] },
-    { id: "long", label: "Long", tags: ["fairy", "beach", "formal"] }, { id: "bun", label: "Bun", tags: ["formal", "garden"] },
+    { id: "long", label: "Long", tags: ["fairy", "beach", "formal", "winter"] }, { id: "bun", label: "Bun", tags: ["formal", "garden", "cozy"] },
     { id: "afro", label: "Big curls", tags: ["rock", "summer", "space"] }, { id: "pony", label: "Ponytail", tags: ["sporty", "beach"] },
     { id: "mohawk", label: "Mohawk", tags: ["rock", "spooky", "dark"] }, { id: "none", label: "Bald", tags: ["space"] },
   ],
@@ -562,7 +562,7 @@ function tally(r, n) {
   for (const h of humans()) {
     if (h === id) continue;
     const rt = h === net.sessionId ? me.rate : cached("rate:" + h, S.entities.players[h]?.rate, null), s = rt && rt.r === r.id ? +rt.s?.[id] : 0;
-    if (s >= 1 && s <= 5) { sum += s; cnt++; }
+    if (Number.isInteger(s) && s >= 1 && s <= 5) { sum += s; cnt++; } // whole stars only
   }
   const look = who(r, id);
   for (const b of host.bots) if (b.i !== id && look) { sum += botStars(look.o, theme); cnt++; }
